@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestion Inventaire V13 - Compact</title>
+    
+    <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3652/3652191.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <style>
+        :root {
+            --primary: #4a90e2;
+            --danger: #e74c3c;
+            --success: #2ecc71;
+            --light: #f4f4f9;
+            --dark: #333;
+            --border: #ddd;
+        }
+
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; margin: 0; padding: 0; background-color: var(--light); color: var(--dark); }
+
+        .navbar { display: flex; background: white; border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 1000; }
+        .nav-item { flex: 1; padding: 18px 5px; text-align: center; cursor: pointer; font-weight: bold; color: #555; transition: 0.2s; border-bottom: 4px solid transparent; font-size: 13px; }
+        .nav-item.active { background-color: var(--primary); color: white; border-bottom: 4px solid #2a6cb3; }
+
+        .tab-content { display: none; padding: 10px; max-width: 1000px; margin: 0 auto; }
+        .tab-content.active { display: block; }
+
+        .btn { padding: 10px 15px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-add { background-color: var(--success); }
+        .btn-danger { background-color: var(--danger); }
+        .btn-sep { background-color: #607d8b; }
+        .btn-subtle { background: #dcdde1; color: #2f3640; width: 32px; height: 32px; padding: 0; font-size: 11px; border-radius: 4px; border: 1px solid #bdc3c7; cursor: pointer; font-weight: bold; }
+
+        input[type="text"], input[type="number"], .editable-cell { 
+            padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; box-sizing: border-box; color: var(--dark); background: white;
+        }
+
+        .table-container { overflow-x: auto; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        table { width: auto; border-collapse: collapse; }
+        th { background: #f1f1f1; padding: 10px 5px; font-size: 0.7em; text-transform: uppercase; border-bottom: 2px solid #ddd; text-align: left; color: #666; }
+        td { padding: 5px; border-bottom: 1px solid #eee; vertical-align: middle; }
+        
+        /* Largeurs fixes pour maximiser l'espace */
+        .col-drag { width: 30px; text-align: center; }
+        .col-rank { width: 75px; } /* Supporte jusqu'à 999 sans problème */
+        .col-name { width: 320px; } /* Raccourci pour mobile */
+        .col-val { width: 65px; }  /* Prix et Stock raccourcis */
+        .col-del { width: 35px; text-align: center; }
+
+        tr.dragging { opacity: 0.5; background: #e3f2fd; border: 2px dashed var(--primary); }
+        .drag-handle { cursor: grab; font-size: 18px; color: #ccc; }
+
+        .rank-input { width: 65px !important; text-align: center; font-weight: bold; background: #f9f9f9 !important; }
+        .name-input { width: 100% !important; }
+        .val-input { width: 100% !important; text-align: center; }
+
+        .row-separator { background-color: #f8f9fa !important; }
+
+        .list-item { display: flex; justify-content: space-between; align-items: center; background: white; padding: 12px; margin-bottom: 8px; border-radius: 6px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); border-left: 5px solid var(--primary); }
+        .list-separator-view { background: #dfe6e9; padding: 6px; margin: 15px 0; border-radius: 4px; font-size: 0.7em; color: #2d3436; font-weight: bold; text-align: center; text-transform: uppercase; }
+        
+        .order-btns { display: flex; gap: 4px; }
+        .btn-order-small { background: #eee; border: 1px solid #ccc; border-radius: 3px; width: 28px; height: 28px; font-size: 14px; cursor: pointer; }
+
+        .suggestions { position: absolute; background: white; width: 100%; z-index: 100; border: 1px solid #ccc; border-radius: 0 0 4px 4px; max-height: 200px; overflow-y: auto; }
+    </style>
+</head>
+<body>
+
+<div class="navbar">
+    <div id="nav-index" class="nav-item active" onclick="switchTab('index')">INDEX</div>
+    <div id="nav-inventaire" class="nav-item" onclick="switchTab('inventaire')">INVENTAIRE</div>
+    <div id="nav-finale" class="nav-item" onclick="switchTab('finale')">LISTE FINALE</div>
+</div>
+
+<div id="index" class="tab-content active">
+    <div style="max-width:600px; margin: 0 auto;">
+        <div style="background: white; padding: 15px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 25px;">
+            <h3 style="margin-top:0;">Ajouter un équipement</h3>
+            <div style="position: relative; margin-bottom:10px;">
+                <input type="text" id="searchInput" placeholder="Chercher un item..." autocomplete="off">
+                <div id="suggestions" class="suggestions" style="display:none;"></div>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <div style="display:flex; border:1px solid #ccc; border-radius:4px; overflow:hidden;">
+                    <button onclick="changePreQty(-1)" style="width:40px; border:none; background:#eee;">-</button>
+                    <input type="number" id="preQty" value="1" style="width:50px; border:none; text-align:center;">
+                    <button onclick="changePreQty(1)" style="width:40px; border:none; background:#eee;">+</button>
+                </div>
+                <button class="btn btn-add" style="flex-grow:1;" onclick="addItemFromSearch()">AJOUTER</button>
+            </div>
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 10px;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <h3 style="margin:0;">Ma Liste en cours</h3>
+                <button class="btn btn-subtle" onclick="addAllInventoryToCurrent()" title="Ajouter tout l'inventaire">ALL</button>
+            </div>
+            <button class="btn btn-danger" style="padding: 5px 10px; font-size: 11px;" onclick="clearCurrentList()">EFFACER TOUT</button>
+        </div>
+        <div id="currentListContainer"></div>
+    </div>
+</div>
+
+<div id="inventaire" class="tab-content">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
+        <h2 style="margin:0; font-size:1.2em;">Inventaire Global</h2>
+        <button class="btn btn-danger" style="font-size:10px; background:#c0392b;" onclick="clearFullInventory()">EFFACER TOUT</button>
+    </div>
+
+    <div style="margin-bottom: 15px; display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-add" onclick="addNewInventoryRow()">+ ITEM</button>
+        <button class="btn btn-sep" onclick="addSeparator()">+ SÉPARATEUR</button>
+        <button class="btn" style="background:#6c757d;" onclick="toggleImport()">IMPORT</button>
+    </div>
+
+    <div id="importSection" style="display:none; background:#fff3cd; padding:15px; border-radius:8px; margin-bottom:15px;">
+        <textarea id="importText" placeholder="Nom	Prix	Stock" style="width:100%; height:80px;"></textarea>
+        <button class="btn btn-add" style="margin-top:5px;" onclick="processImport()">VALIDER</button>
+    </div>
+
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th class="col-drag"></th>
+                    <th class="col-rank">#</th>
+                    <th class="col-name">NOM / SÉPARATEUR</th>
+                    <th class="col-val">PRIX</th>
+                    <th class="col-val">STOCK</th>
+                    <th class="col-del"></th>
+                </tr>
+            </thead>
+            <tbody id="inventoryBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<div id="finale" class="tab-content">
+    <div style="max-width: 600px; margin: 0 auto;">
+        <h2>Prêt pour Google Sheets</h2>
+        <div class="table-container" style="min-width: auto;">
+            <table style="min-width: 100%;">
+                <tbody id="finalListBody"></tbody>
+            </table>
+        </div>
+        <button class="btn btn-copy" style="background:var(--primary); width:100%; margin-top:20px; padding:20px; font-size: 16px;" onclick="copyToClipboard()">COPIER LA LISTE</button>
+    </div>
+</div>
+
+<script>
+    let inventory = JSON.parse(localStorage.getItem('myInventory')) || [];
+    let currentList = JSON.parse(localStorage.getItem('myCurrentList')) || [];
+    let selectedItemId = null;
+    let draggedItemIndex = null;
+
+    function saveData() {
+        localStorage.setItem('myInventory', JSON.stringify(inventory));
+        localStorage.setItem('myCurrentList', JSON.stringify(currentList));
+    }
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        document.getElementById('nav-' + tabId).classList.add('active');
+        if(tabId === 'inventaire') renderInventoryTable();
+        renderCurrentList();
+    }
+
+    function addAllInventoryToCurrent() {
+        if(confirm("Ajouter tout l'inventaire ?")) {
+            inventory.forEach(item => {
+                if(!item.isSep && !currentList.find(li => li.id === item.id)) {
+                    currentList.push({ id: item.id, qty: 1 });
+                }
+            });
+            saveData(); renderCurrentList();
+        }
+    }
+
+    const searchInput = document.getElementById('searchInput');
+    const suggestionsBox = document.getElementById('suggestions');
+
+    searchInput.addEventListener('input', (e) => {
+        const val = e.target.value.toLowerCase();
+        suggestionsBox.innerHTML = '';
+        if (val.length < 1) { suggestionsBox.style.display = 'none'; return; }
+        const matches = inventory.filter(item => !item.isSep && item.name.toLowerCase().includes(val));
+        if (matches.length > 0) {
+            suggestionsBox.style.display = 'block';
+            matches.forEach(item => {
+                const div = document.createElement('div');
+                div.style.padding = '12px'; div.style.cursor = 'pointer'; div.style.borderBottom = '1px solid #eee';
+                div.textContent = item.name;
+                div.onclick = () => { searchInput.value = item.name; selectedItemId = item.id; suggestionsBox.style.display = 'none'; };
+                suggestionsBox.appendChild(div);
+            });
+        }
+    });
+
+    function addItemFromSearch() {
+        const item = inventory.find(i => i.name === searchInput.value || i.id === selectedItemId);
+        if (!item || item.isSep) return alert("Veuillez choisir un item.");
+        const qty = parseInt(document.getElementById('preQty').value) || 1;
+        const existing = currentList.find(i => i.id === item.id);
+        if (existing) existing.qty += qty; else currentList.push({ id: item.id, qty: qty });
+        searchInput.value = ''; document.getElementById('preQty').value = 1; selectedItemId = null;
+        saveData(); renderCurrentList();
+    }
+
+    function renderInventoryTable() {
+        const tbody = document.getElementById('inventoryBody');
+        tbody.innerHTML = '';
+        inventory.forEach((item, index) => {
+            const tr = document.createElement('tr');
+            tr.draggable = true;
+            tr.dataset.index = index;
+            if (item.isSep) tr.className = 'row-separator';
+
+            tr.addEventListener('dragstart', handleDragStart);
+            tr.addEventListener('dragover', handleDragOver);
+            tr.addEventListener('drop', handleDrop);
+            tr.addEventListener('dragend', handleDragEnd);
+
+            const safeName = item.name.replace(/"/g, '&quot;');
+
+            tr.innerHTML = `
+                <td class="col-drag"><div class="drag-handle">≡</div></td>
+                <td class="col-rank">
+                    <input type="number" class="editable-cell rank-input" 
+                           value="${index + 1}" 
+                           onchange="reorderRank(${index}, this.value)">
+                </td>
+                <td class="col-name">
+                    <input class="editable-cell name-input" 
+                           style="${item.isSep ? 'font-weight:bold; color:#607d8b;' : ''}" 
+                           type="text" 
+                           value="${safeName}" 
+                           onchange="updateInv(${index}, 'name', this.value)">
+                </td>
+                <td class="col-val">${item.isSep ? '-' : `<input class="editable-cell val-input" type="number" value="${item.price}" onchange="updateInv(${index}, 'price', this.value)">`}</td>
+                <td class="col-val">${item.isSep ? '-' : `<input class="editable-cell val-input" type="number" value="${item.stock}" onchange="updateInv(${index}, 'stock', this.value)">`}</td>
+                <td class="col-del" style="color:red; cursor:pointer; font-size:18px;" onclick="deleteInvItem(${index})">×</td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    function reorderRank(oldIndex, newRank) {
+        let newIndex = parseInt(newRank) - 1;
+        if (isNaN(newIndex)) return renderInventoryTable();
+        if (newIndex < 0) newIndex = 0;
+        if (newIndex >= inventory.length) newIndex = inventory.length - 1;
+        const item = inventory.splice(oldIndex, 1)[0];
+        inventory.splice(newIndex, 0, item);
+        saveData();
+        renderInventoryTable();
+    }
+
+    function handleDragStart(e) { draggedItemIndex = this.dataset.index; this.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; }
+    function handleDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+    function handleDrop(e) {
+        e.preventDefault();
+        const targetIndex = this.dataset.index;
+        if (draggedItemIndex !== targetIndex) {
+            const item = inventory.splice(draggedItemIndex, 1)[0];
+            inventory.splice(targetIndex, 0, item);
+            saveData(); renderInventoryTable();
+        }
+    }
+    function handleDragEnd() { this.classList.remove('dragging'); }
+
+    function updateInv(index, field, val) {
+        inventory[index][field] = (field === 'name') ? val : Number(val);
+        saveData();
+    }
+
+    function clearFullInventory() { if(confirm("Supprimer l'inventaire complet ?")) { inventory = []; saveData(); renderInventoryTable(); } }
+    function addSeparator() { inventory.push({ id: Date.now(), name: "--- NOUVELLE SECTION ---", isSep: true }); saveData(); renderInventoryTable(); }
+    function addNewInventoryRow() { inventory.push({ id: Date.now(), name: "Nouvel Item", price: 0, stock: 1, isSep: false }); saveData(); renderInventoryTable(); }
+    function deleteInvItem(index) { if(confirm("Supprimer ?")) { inventory.splice(index, 1); saveData(); renderInventoryTable(); } }
+
+    function renderCurrentList() {
+        const container = document.getElementById('currentListContainer');
+        const finalTbody = document.getElementById('finalListBody');
+        if(!container || !finalTbody) return;
+        container.innerHTML = ''; finalTbody.innerHTML = '';
+
+        inventory.forEach(invItem => {
+            if (invItem.isSep) {
+                const sepDiv = document.createElement('div');
+                sepDiv.className = 'list-separator-view';
+                sepDiv.textContent = invItem.name;
+                container.appendChild(sepDiv);
+                finalTbody.innerHTML += `<tr><td colspan="2" style="height:40px;">\u00A0</td></tr>`;
+            } else {
+                const listItem = currentList.find(li => li.id === invItem.id);
+                if (listItem) {
+                    const div = document.createElement('div');
+                    div.className = 'list-item';
+                    div.innerHTML = `<span><strong>${listItem.qty}x</strong> ${invItem.name}</span>
+                        <div class="order-btns">
+                            <button class="btn-order-small" onclick="updateQty(${listItem.id}, 1)">+</button>
+                            <button class="btn-order-small" onclick="updateQty(${listItem.id}, -1)">-</button>
+                            <button class="btn-order-small" style="color:red; background:#fff;" onclick="remove(${listItem.id})">×</button>
+                        </div>`;
+                    container.appendChild(div);
+                    finalTbody.innerHTML += `<tr><td style="width:15%; font-weight:bold; text-align:center; padding:12px; border-bottom:1px solid #eee;">${listItem.qty}</td><td style="padding:12px; border-bottom:1px solid #eee;">${invItem.name}</td></tr>`;
+                }
+            }
+        });
+    }
+
+    function updateQty(id, change) {
+        const item = currentList.find(li => li.id === id);
+        if(item) item.qty = Math.max(1, item.qty + change);
+        saveData(); renderCurrentList();
+    }
+
+    function remove(id) { currentList = currentList.filter(li => li.id !== id); saveData(); renderCurrentList(); }
+    function clearCurrentList() { if(confirm("Vider la liste ?")) { currentList = []; saveData(); renderCurrentList(); } }
+
+    function copyToClipboard() {
+        let txt = "";
+        inventory.forEach(invItem => {
+            if (invItem.isSep) { txt += "\u00A0\t\u00A0\n\u00A0\t\u00A0\n"; } 
+            else {
+                const listItem = currentList.find(li => li.id === invItem.id);
+                if (listItem) txt += `${listItem.qty}\t${invItem.name}\n`;
+            }
+        });
+        navigator.clipboard.writeText(txt).then(() => alert("Copié !"));
+    }
+
+    function toggleImport() { const s = document.getElementById('importSection'); s.style.display = (s.style.display === 'none') ? 'block' : 'none'; }
+
+    function processImport() {
+        const text = document.getElementById('importText').value;
+        const rows = text.split('\n');
+        rows.forEach((row, i) => {
+            const cols = row.split('\t');
+            if(cols[0]) inventory.push({ id: Date.now() + i, name: cols[0].trim(), price: cols[1] ? parseFloat(cols[1].replace(/[^\d.,]/g, '')) : 0, stock: cols[2] ? parseInt(cols[2].replace(/\D/g, '')) : 1, isSep: false });
+        });
+        saveData(); renderInventoryTable(); toggleImport();
+    }
+
+    function changePreQty(val) { const input = document.getElementById('preQty'); input.value = Math.max(1, (parseInt(input.value) || 1) + val); }
+
+    document.addEventListener('click', (e) => { if(e.target !== searchInput) suggestionsBox.style.display = 'none'; });
+    switchTab('index');
+</script>
+</body>
+</html>
